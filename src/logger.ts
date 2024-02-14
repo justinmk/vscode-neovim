@@ -26,8 +26,17 @@ export interface ILogger {
     log(uri: vscode.Uri | undefined, level: vscode.LogLevel, ...logArgs: any[]): void;
 }
 
-function getTimestamp(): string {
-    return new Date().toISOString();
+// Ring buffer of last N messages.
+const logMessages: { date: Date, msg: string }[] = []
+function addLogMsg(date: Date, msg: string) {
+    logMessages.push({ date: date, msg: msg });
+    if (logMessages.length > 100) {
+        logMessages.shift();
+    }
+}
+
+export function getLogs() {
+    return logMessages;
 }
 
 export class Logger implements Disposable {
@@ -56,6 +65,7 @@ export class Logger implements Disposable {
         this.logToConsole = logToConsole;
         this.filePath = filePath;
         this.setupLogFile();
+        this.outputChannel = outputChannel;
     }
 
     public dispose(): void {
@@ -102,6 +112,9 @@ export class Logger implements Disposable {
     }
 
     private log(level: vscode.LogLevel, scope: string, logToOutputChannel: boolean, args: any[]): void {
+        const date = new Date();
+        const timestamp = date.toISOString();
+
         const msg = args.reduce<string>((p, c, i) => {
             if (typeof c === "object") {
                 try {
@@ -112,6 +125,12 @@ export class Logger implements Disposable {
             }
             return `${p}${(i > 0 ? " " : "")}${c}`;
         }, "");
+
+        if (process.env.NEOVIM_DEBUG) {
+            // Currently only used for testing. If we want to query logs for non-testing purposes we
+            // should use a more clever "ring buffer" implementation.
+            addLogMsg(date, msg);
+        }
 
         if (this.fd || this.logToConsole) {
             const logMsg = `${getTimestamp()} ${scope}: ${msg}`;

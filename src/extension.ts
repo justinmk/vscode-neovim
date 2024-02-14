@@ -4,7 +4,7 @@ import actions from "./actions";
 import { config } from "./config";
 import { EXT_ID } from "./constants";
 import { eventBus } from "./eventBus";
-import { createLogger, logger as rootLogger } from "./logger";
+import { createLogger, getLogs, logger as rootLogger } from "./logger";
 import { MainController } from "./main_controller";
 import { VSCodeContext, disposeAll } from "./utils";
 
@@ -14,8 +14,6 @@ const logger = createLogger(EXT_ID);
 // deactivates and are not affected by the restart command.
 const disposables: vscode.Disposable[] = [];
 export async function activate(context: vscode.ExtensionContext, isRestart = false): Promise<void> {
-    const isDebug = parseInt(process.env.NEOVIM_DEBUG || "", 10) === 1;
-
     if (!isRestart) {
         disposables.push(
             vscode.commands.registerCommand("vscode-neovim.restart", async () => {
@@ -31,9 +29,21 @@ export async function activate(context: vscode.ExtensionContext, isRestart = fal
         verifyExperimentalAffinity();
     }
 
+    const outputChannel = vscode.window.createOutputChannel(EXT_NAME, { log: true });
+    disposables.push(
+      outputChannel,
+      vscode.commands.registerCommand("vscode-neovim.viewLogs", () => {
+          outputChannel.show();
+      }),
+      // Used by tests to call various functions.
+      vscode.commands.registerCommand("_vscodeneovim._test", (...args: any[]) => {
+          return getLogs();
+      }),
+    );
+
+
     config.init();
-    const logPath = isDebug ? "./vscode-neovim.log" : config.logPath;
-    rootLogger.init(logPath, config.outputToConsole, outputChannel);
+    rootLogger.init(config.logPath, config.outputToConsole, outputChannel);
     eventBus.init();
     actions.init();
     context.subscriptions.push(
@@ -47,7 +57,7 @@ export async function activate(context: vscode.ExtensionContext, isRestart = fal
     try {
         const plugin = new MainController(context);
         context.subscriptions.push(plugin);
-        await plugin.init(outputChannel, isDebug);
+        await plugin.init(outputChannel);
     } catch (e) {
         vscode.window
             .showErrorMessage(`[Failed to start nvim] ${e instanceof Error ? e.message : e}`, "Restart")

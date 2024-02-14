@@ -311,6 +311,37 @@ export async function assertContent(
     }
 }
 
+/** Asserts that the log messages match the pattern(s) given by `expect`. */
+export async function assertLogs(
+    expect: RegExp[],
+    stack = new Error().stack,
+): Promise<void> {
+    // let waitingMs = 0;
+    // while (waitingMs < 5000) {
+    //     // XXX: Focus the logs output channel "editor".
+    //     await commands.executeCommand("vscode-neovim.viewLogs");
+    //     const uri = window.activeTextEditor?.document.uri.toString();
+    //     if (uri && /output:asvetliakov.vscode-neovim.vscode-neovim/i.test(uri)) {
+    //         break;
+    //     }
+    //     await wait(100);
+    // }
+    const logs: any[] = await commands.executeCommand("_vscodeneovim._test");
+    const logMsgs: string[] = logs.map(o => o.msg);
+
+    try {
+        for (const pattern of expect) {
+            const found = logMsgs.find((line) => pattern.test(line));
+            if (!found) {
+                assert.fail(`No log messages match pattern: ${pattern}`);
+            }
+        }
+    } catch (e) {
+        (e as Error).stack = stack;
+        throw e;
+    }
+}
+
 export async function setSelection(selection: Selection, waitTimeout = 250, editor?: TextEditor): Promise<void> {
     if (!editor) {
         editor = window.activeTextEditor;

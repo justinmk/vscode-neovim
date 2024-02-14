@@ -5,7 +5,7 @@ import fs from "fs";
 import vscode, { Selection } from "vscode";
 import { NeovimClient } from "neovim";
 
-import { attachTestNvimClient, closeAllActiveEditors, closeNvimClient } from "../utils";
+import { assertContent, assertLogs, attachTestNvimClient, closeAllActiveEditors, closeNvimClient, wait } from "../utils";
 
 describe("startup", () => {
     let client: NeovimClient;
@@ -22,6 +22,7 @@ describe("startup", () => {
     });
 
     it("searches for Nvim on the system", async () => {
+        await assertLogs([/Nvim info/, /configDir:/, /nvimVersion:/, /logFile:/]);
         // MainController.validateNvim('9999.0.0');
         // await client.lua(`
         //     vim.ui.input({ prompt = 'Enter a value: ' }, function(input)

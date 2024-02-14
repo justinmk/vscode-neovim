@@ -399,6 +399,10 @@
         },
         "commands": [
             {
+                "command": "vscode-neovim.viewLogs",
+                "title": "Neovim: View Extension Logs"
+            },
+            {
                 "command": "vscode-neovim.restart",
                 "title": "Neovim: Restart Extension"
             },
