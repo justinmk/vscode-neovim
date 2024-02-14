@@ -63,9 +63,9 @@ export class MainController implements vscode.Disposable {
 
     public constructor(private extContext: ExtensionContext) {}
 
-    public async init(outputChannel: vscode.LogOutputChannel): Promise<void> {
+    public async init(outputChannel: vscode.LogOutputChannel, isDebug: boolean): Promise<void> {
         this.validateNvim(NVIM_MIN_VERSION);
-        const [cmd, args] = this.buildSpawnArgs();
+        const [cmd, args] = this.buildSpawnArgs(isDebug);
         logger.info(`Starting: ${cmd} ${args.join(" ")}`);
         this.nvimProc = spawn(cmd, args);
         this.disposables.push(
@@ -203,7 +203,7 @@ export class MainController implements vscode.Disposable {
       logger.info(msg);
     }
 
-    private buildSpawnArgs(): [string, string[]] {
+    private buildSpawnArgs(isDebug: boolean): [string, string[]] {
         let extensionPath = this.extContext.extensionPath.replace(/\\/g, "\\\\");
         if (config.useWsl) {
             extensionPath = wslpath(extensionPath);
@@ -230,7 +230,7 @@ export class MainController implements vscode.Disposable {
             `source ${neovimPreScriptPath}`,
         );
 
-        if (parseInt(process.env.NEOVIM_DEBUG || "", 10) === 1) {
+        if (isDebug) {
             args.push(
                 "-u",
                 "NONE",

@@ -14,6 +14,8 @@ const logger = createLogger(EXT_ID);
 // deactivates and are not affected by the restart command.
 const disposables: vscode.Disposable[] = [];
 export async function activate(context: vscode.ExtensionContext, isRestart = false): Promise<void> {
+    const isDebug = parseInt(process.env.NEOVIM_DEBUG || "", 10) === 1;
+
     if (!isRestart) {
         disposables.push(
             vscode.commands.registerCommand("vscode-neovim.restart", async () => {
@@ -30,7 +32,8 @@ export async function activate(context: vscode.ExtensionContext, isRestart = fal
     }
 
     config.init();
-    rootLogger.init(config.logPath, config.outputToConsole);
+    const logPath = isDebug ? "./vscode-neovim.log" : config.logPath;
+    rootLogger.init(logPath, config.outputToConsole, outputChannel);
     eventBus.init();
     actions.init();
     context.subscriptions.push(
@@ -44,7 +47,7 @@ export async function activate(context: vscode.ExtensionContext, isRestart = fal
     try {
         const plugin = new MainController(context);
         context.subscriptions.push(plugin);
-        await plugin.init();
+        await plugin.init(outputChannel, isDebug);
     } catch (e) {
         vscode.window
             .showErrorMessage(`[Failed to start nvim] ${e instanceof Error ? e.message : e}`, "Restart")

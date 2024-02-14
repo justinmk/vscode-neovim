@@ -77,6 +77,10 @@ by:
 -   run `npm run format` to automatically format typescript and lua code.
 -   run `npm run lint` to check for errors in typescript code.
 
+The test scripts set `$NEOVIM_DEBUG` which has these effects:
+- Starts `nvim` with `--listen` argument, so Nvim listens on localhost TCP port.
+- Sets `vscode-neovim.logPath` to `./vscode-neovim.log`.
+
 ## Design Principles
 
 -   **Focus on removing code**. As it is, the project is already too large and complex, full of workarounds due to
