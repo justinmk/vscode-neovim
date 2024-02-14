@@ -8,6 +8,7 @@ export const GlyphChars = {
 
 export const EXT_NAME = "vscode-neovim";
 export const EXT_ID = `asvetliakov.${EXT_NAME}`;
+export const NVIM_MIN_VERSION = "0.9.0";
 
 export const CTRL_KEYS = [
     "a",

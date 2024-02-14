@@ -36,8 +36,8 @@ end
 
 local warn = true
 local msgs = {
-  ("vscode-neovim requires nvim version %s or higher."):format(MIN_VERSION),
-  "Install the [latest stable version](https://github.com/neovim/neovim/releases/latest).",
+  ("vscode-neovim requires Nvim %s or newer."):format(MIN_VERSION),
+  "[Update Nvim](https://github.com/neovim/neovim/releases/latest).",
 }
 if cmp < 0 then
   -- nothing

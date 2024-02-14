@@ -102,7 +102,7 @@ export class Logger implements Disposable {
     }
 
     private log(level: vscode.LogLevel, scope: string, logToOutputChannel: boolean, args: any[]): void {
-        const msg = args.reduce((p, c, i) => {
+        const msg = args.reduce<string>((p, c, i) => {
             if (typeof c === "object") {
                 try {
                     c = inspect(c, false, 2, false);
@@ -110,7 +110,7 @@ export class Logger implements Disposable {
                     // ignore
                 }
             }
-            return p + (i > 0 ? " " : "") + c;
+            return `${p}${(i > 0 ? " " : "")}${c}`;
         }, "");
 
         if (this.fd || this.logToConsole) {
@@ -124,7 +124,7 @@ export class Logger implements Disposable {
         const activeDoc = window.activeTextEditor?.document; // "output:asvetliakov.vscode-neovim.vscode-neovim"
         const outputFocused = activeDoc?.uri.scheme === "output" || activeDoc?.fileName?.startsWith("output:");
         if (logToOutputChannel && this.outputChannel && activeDoc && !outputFocused) {
-            const fullMsg = `${scope}: ${msg}`;
+            const fullMsg = `${scope}: ${msg.trim()}`;
             switch (level) {
                 case vscode.LogLevel.Error:
                     this.outputChannel.error(fullMsg);

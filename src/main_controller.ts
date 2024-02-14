@@ -10,8 +10,7 @@ import actions from "./actions";
 import { BufferManager } from "./buffer_manager";
 import { CommandLineManager } from "./cmdline_manager";
 import { CommandsController } from "./commands_controller";
-import { config } from "./config";
-import { NVIM_MIN_VERSION } from "./constants";
+import { config, openSettings } from "./config";
 import { CursorManager } from "./cursor_manager";
 import { DocumentChangeManager } from "./document_change_manager";
 import { eventBus } from "./eventBus";
@@ -23,6 +22,7 @@ import { StatusLineManager } from "./status_line_manager";
 import { TypingManager } from "./typing_manager";
 import { disposeAll, findLastEvent, VSCodeContext, wslpath } from "./utils";
 import { ViewportManager } from "./viewport_manager";
+import { NVIM_MIN_VERSION } from "./constants";
 
 interface RequestResponse {
     send(resp: unknown, isError?: boolean): void;
@@ -63,9 +63,10 @@ export class MainController implements vscode.Disposable {
 
     public constructor(private extContext: ExtensionContext) {}
 
-    public async init(): Promise<void> {
+    public async init(outputChannel: vscode.LogOutputChannel): Promise<void> {
+        this.validateNvim(NVIM_MIN_VERSION);
         const [cmd, args] = this.buildSpawnArgs();
-        logger.info(`Starting nvim: ${cmd} ${args.join(" ")}`);
+        logger.info(`Starting: ${cmd} ${args.join(" ")}`);
         this.nvimProc = spawn(cmd, args);
         this.disposables.push(
             new Disposable(() => {
@@ -167,6 +168,41 @@ export class MainController implements vscode.Disposable {
         });
     }
 
+    /** Checks if we can find Nvim. */
+    private async validateNvim(minVersion: string): Promise<void> {
+      if (config.neovimPath) {
+          logger.info("Using Nvim from user-configured path:", config.neovimPath);
+          return;
+      }
+
+      const r = findNvim({ minVersion: minVersion, orderBy: 'desc' });
+      if (r.matches.length > 0) {
+          logger.info("Using Nvim found at:", r.matches[0].path);
+          return;
+      }
+
+      let msg = '';
+      if (r.invalid.length > 0) {
+        msg = `Nvim ${minVersion} or newer is required. Found older versions:\n`;
+        for (const v of r.invalid) {
+            msg += `${v.path} : ${v.nvimVersion}\n`;
+        }
+      } else {
+        msg = 'Nvim not found on your system. Install it and/or configure the full path in settings.'
+      }
+
+      // const platform = process.platform as "win32" | "darwin" | "linux";
+      // const settingId = `vscode-neovim.neovimExecutablePaths.${platform}`;
+      vscode.window.showErrorMessage(msg, "Install Nvim", "Configure Path to Nvim").then((value) => {
+          if (value == "Install Nvim") {
+            vscode.env.openExternal(vscode.Uri.parse('https://github.com/neovim/neovim/releases/latest'));
+          } else if (value == "Configure Path to Nvim") {
+            openSettings("vscode-neovim.neovimExecutablePaths");
+          }
+      });
+      logger.info(msg);
+    }
+
     private buildSpawnArgs(): [string, string[]] {
         let extensionPath = this.extContext.extensionPath.replace(/\\/g, "\\\\");
         if (config.useWsl) {
@@ -185,24 +221,11 @@ export class MainController implements vscode.Disposable {
             }
         }
 
-        let neovimPath = config.neovimPath;
-        // Only try to find nvim if the path is the default one
-        // And if we are not using WSL
-        if (neovimPath === "nvim" && !config.useWsl) {
-            const nvimResult = findNvim({ minVersion: NVIM_MIN_VERSION });
-            logger.debug("Find nvim result: ", nvimResult);
-            const matched = nvimResult.matches.find((match) => !match.error);
-            if (!matched) {
-                throw new Error("Unable to find a suitable neovim executable. Please check your neovim installation.");
-            }
-            neovimPath = matched.path;
-        }
-
         args.push(
-            neovimPath,
+            config.neovimPath,
             "-N",
             "--embed",
-            // Initialize vscode neovim modules
+            // Initialize vscode-neovim modules
             "--cmd",
             `source ${neovimPreScriptPath}`,
         );
