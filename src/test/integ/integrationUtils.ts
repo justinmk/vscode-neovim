@@ -183,7 +183,7 @@ export async function sendInsertKey(key = "i", timeout = 250): Promise<void> {
 
 export async function sendVSCodeSpecialKey(
     key: "backspace" | "delete" | "cursorLeft" | "cursorRight" | "cursorUp" | "cursorDown",
-    waitTimeout = 100,
+    waitTimeout = 10,
 ): Promise<void> {
     switch (key) {
         case "backspace": {
