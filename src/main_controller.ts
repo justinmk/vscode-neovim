@@ -1,5 +1,8 @@
 import { ChildProcess, spawn } from "child_process";
 import path from "path";
+import fs from "node:fs";
+import os from "node:os";
+// import net from "node:net";
 
 import { attach, findNvim, NeovimClient } from "neovim";
 import vscode, { Disposable, ExtensionKind, Range, window, type ExtensionContext } from "vscode";
@@ -36,8 +39,28 @@ interface VSCodeActionOptions {
     callback?: string;
 }
 
+let pipeName: string | undefined;
+/** Creates a new unix domain socket path or named pipe (Windows). */
+function getPipeName(extContext?: ExtensionContext): string {
+    if (pipeName) {
+        return pipeName;
+    }
+    if (!extContext) {
+        throw new Error();
+    }
+    const pid = process.pid;
+    if (os.platform() === "win32") {
+        pipeName = `\\\\.\\pipe\\vscode-neovim.${pid}`;
+        return pipeName;
+    }
+    const extDir = extContext.globalStorageUri.fsPath;
+    fs.mkdirSync(extDir, { recursive: true });
+    pipeName = path.join(extDir, `vscode-neovim.${pid}.sock`);
+    return pipeName;
+}
+
 export class MainController implements vscode.Disposable {
-    private nvimProc!: ChildProcess;
+    private nvimProc?: ChildProcess;
     public client!: NeovimClient;
 
     private disposables: vscode.Disposable[] = [];
@@ -67,14 +90,14 @@ export class MainController implements vscode.Disposable {
         this.nvimProc = spawn(cmd, args);
         this.disposables.push(
             new Disposable(() => {
-                this.nvimProc.removeAllListeners();
-                this.nvimProc.kill();
+                this.nvimProc?.removeAllListeners();
+                this.nvimProc?.kill();
             }),
         );
         const spawnPromise = new Promise<void>((resolve, reject) => {
-            this.nvimProc.once("spawn", () => resolve());
-            this.nvimProc.once("close", (code, signal) => reject(new Error(`Neovim exited: ${code} ${signal}`)));
-            this.nvimProc.once("error", (err) => reject(new Error(`Neovim spawn error: ${err.message}`)));
+            this.nvimProc?.once("spawn", () => resolve());
+            this.nvimProc?.once("close", (code, signal) => reject(new Error(`Neovim exited: ${code} ${signal}`)));
+            this.nvimProc?.once("error", (err) => reject(new Error(`Neovim spawn error: ${err.message}`)));
         });
         await spawnPromise;
         this.nvimProc.removeAllListeners();
@@ -82,8 +105,13 @@ export class MainController implements vscode.Disposable {
         this.nvimProc.on("error", (err) => this._stop(`Neovim spawn error: ${err.message}`));
 
         logger.debug(`Attaching to neovim`);
+
+        // const conn = net.createConnection({ port: parseInt(NV_PORT as string, 10), host: NV_HOST });
+        // const client = attach({ writer: conn, reader: conn });
+
         this.client = attach({
-            proc: this.nvimProc,
+            // proc: this.nvimProc,
+            socket: getPipeName(),
             options: {
                 logger: winstonCreateLogger({
                     transports: [new loggerTransports.Console()],
@@ -105,6 +133,10 @@ export class MainController implements vscode.Disposable {
         await this.setCurrentDir();
         await this.client.setVar("vscode_channel", await this.client.channelId);
 
+        // process.stdout.write('x\n'.repeat(1024*1024));
+        // console.log('x\n'.repeat(10*1024*1024));
+        // process.stdout.end();
+        // process.stdout.destroy();
         // This is an exception. Should avoid doing this.
         Object.defineProperty(actions, "client", { get: () => this.client, configurable: true });
 
@@ -153,6 +185,10 @@ export class MainController implements vscode.Disposable {
         await VSCodeContext.set("neovim.init", true);
         await this.logNvimInfo(); // Do this _after_ UIAttach.
         await this.validateNvimRuntime();
+        // this.nvimProc.stdout?.destroy();
+        // this.nvimProc.stdin?.write('x\n'.repeat(1024));
+        // await this.client.setVar("vscode_nvim_min_version", NVIM_MIN_VERSION);
+        // this.client.command('call chanclose(v:stderr)');
         logger.debug(`Init completed`);
     }
 
@@ -225,13 +261,15 @@ export class MainController implements vscode.Disposable {
         const args: string[] = [
             ...this.resolveNvimCmd(NVIM_MIN_VERSION),
             "-N",
-            "--embed",
+            // "--embed",
             // Initialize vscode-neovim modules
             "--cmd",
             `execute 'source' fnameescape('${neovimPreScriptPath.replace(/'/g, "''")}')`,
         ];
 
-        if (parseInt(process.env.NEOVIM_DEBUG || "", 10) === 1) {
+        if (!isDebug) {
+            args.push("--listen", getPipeName(this.extContext));
+        } else {
             args.push(
                 "-u",
                 "NONE",
@@ -239,6 +277,12 @@ export class MainController implements vscode.Disposable {
                 `${process.env.NEOVIM_DEBUG_HOST || "127.0.0.1"}:${process.env.NEOVIM_DEBUG_PORT || 4000}`,
             );
         }
+
+        args.push(
+            // Initialize vscode neovim modules
+            "--cmd",
+            `source ${neovimPreScriptPath}`,
+        );
 
         if (config.clean) {
             args.push("--clean");
